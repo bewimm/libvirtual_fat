@@ -170,7 +170,12 @@ enum d_tree_error create_bootsector(struct boot_t *boot, struct fat_config_t *co
 	bs->jmp_boot[1] = 0x3C;
 	bs->jmp_boot[2] = 0x90;
 
-	memcpy(bs->oem_name, "MSWIN4.1", sizeof(bs->oem_name));
+	if(!config->user_oem_name)
+		memcpy(config->oem_name, "MSWIN4.1", sizeof(config->oem_name));
+
+	const char *p = config->oem_name;
+	for(size_t i=0; i<sizeof(bs->oem_name) && *p!='\0'; i++)
+		bs->oem_name[i] = *p++;
 
 	if(!config->user_bytes_per_sector)
 		config->bytes_per_sector = 512;
