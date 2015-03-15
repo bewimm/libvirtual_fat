@@ -44,6 +44,7 @@ struct node_data
 		struct file_data
 		{
 			off64_t m_size;
+			bool m_null;
 		} m_file;
 		struct directory_data
 		{
@@ -110,7 +111,10 @@ struct d_tree
 
 #define min(x,y) ((x)<(y)?(x):(y))
 
+enum d_tree_error d_tree_add_dummy(struct d_tree *t, node_t node, const char *name, off64_t size);
 enum d_tree_error d_tree_add_path(struct d_tree *t, node_t node, const char *path, bool recursive);
+
+char *base_name(char *path);
 
 //POSSIBLE BYTES_PER_CLUSTER: 512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288
 //65k+ are not officially supported

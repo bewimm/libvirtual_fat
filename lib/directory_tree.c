@@ -636,29 +636,8 @@ enum d_tree_error d_tree_get_cluster_content(struct d_tree *t, off64_t offset, s
 			{
 				case NODE_FILE:
 				{
-					static node_t last_node = INVALID_NODE;
-					static int last_file = -1;
-
-					if(last_node != n)
+					if(node->m_file.m_null)
 					{
-						if(last_file > 0)
-							close(last_file);
-						last_file = open(node->m_name, O_RDONLY);
-						if(last_file == -1)
-							LOG_ERR("failed to open file");
-						else
-							last_node = n;
-					}
-
-					off64_t file_offset = in_cluster_offset+(off64_t)num_clusters*cluster_size;
-
-					if(last_file == -1 || file_offset >= node->m_file.m_size)
-					{
-						if(last_file == -1)
-						{
-							LOG_ERR("BUG: last_file==-1");
-							return BUG;
-						}
 						size_t len = min(cluster_size-in_cluster_offset,length);
 						memset(dst, 0, len);
 						length -= len;
@@ -667,15 +646,47 @@ enum d_tree_error d_tree_get_cluster_content(struct d_tree *t, off64_t offset, s
 					}
 					else
 					{
-						size_t max_len = min(length, node->m_file.m_size-file_offset);
-						lseek64(last_file, file_offset, SEEK_SET);
-						size_t read_bytes = read(last_file, dst, sizeof(uint8_t)*max_len);
-						if(read_bytes != max_len)
-							LOG_ERR("file does not have the expected length");
+						static node_t last_node = INVALID_NODE;
+						static int last_file = -1;
 
-						length -= max_len;
-						dst += max_len;
-						offset += max_len;
+						if(last_node != n)
+						{
+							if(last_file > 0)
+								close(last_file);
+							last_file = open(node->m_name, O_RDONLY);
+							if(last_file == -1)
+								LOG_ERR("failed to open file");
+							else
+								last_node = n;
+						}
+
+						off64_t file_offset = in_cluster_offset+(off64_t)num_clusters*cluster_size;
+
+						if(last_file == -1 || file_offset >= node->m_file.m_size)
+						{
+							if(last_file == -1)
+							{
+								LOG_ERR("BUG: last_file==-1");
+								return BUG;
+							}
+							size_t len = min(cluster_size-in_cluster_offset,length);
+							memset(dst, 0, len);
+							length -= len;
+							dst += len;
+							offset += len;
+						}
+						else
+						{
+							size_t max_len = min(length, node->m_file.m_size-file_offset);
+							lseek64(last_file, file_offset, SEEK_SET);
+							size_t read_bytes = read(last_file, dst, sizeof(uint8_t)*max_len);
+							if(read_bytes != max_len)
+								LOG_ERR("file does not have the expected length");
+
+							length -= max_len;
+							dst += max_len;
+							offset += max_len;
+						}
 					}
 
 				}
@@ -767,6 +778,44 @@ uint16_t tm_struct_to_fat_time(struct tm *time)
 	return htole16((hour<<11) + (minutes<<5) + sec);
 }
 
+enum d_tree_error d_tree_add_dummy(struct d_tree *t, node_t node, const char *name, off64_t size)
+{
+	char *entry_name = strdup(name);
+	size_t num_children = tree_node_get_num_children(t->m_tree, node);
+	node_t child  = INVALID_NODE;
+	for(size_t i=0; i<num_children; i++)
+	{
+		child = tree_node_get_child(t->m_tree, node, i);
+		size_t idx = (size_t)tree_node_get_data(t->m_tree, child); /*ugly cast from void* to size_t*/
+
+		if(strcmp(t->m_node_data[idx].m_name, entry_name) == 0)
+			break;
+		else
+			child = INVALID_NODE;
+	}
+
+	if(child == INVALID_NODE)
+	{
+		child = tree_node_create(t->m_tree);
+		tree_node_set_parent(t->m_tree, child, node);
+		tree_node_set_data(t->m_tree, child, (void *)t->m_num_nodes);
+		t->m_num_nodes++;
+		t->m_node_data = realloc(t->m_node_data, sizeof(*t->m_node_data)*t->m_num_nodes);
+
+		struct node_data *n = &t->m_node_data[t->m_num_nodes-1];
+
+		n->m_modification_time = 0;
+		n->m_modification_date = 0;
+		n->m_access_date = 0;
+
+		n->m_name = entry_name;
+		n->m_file.m_null = true;
+		n->m_file.m_size = size;
+		n->m_type = NODE_FILE;
+	}
+	return SUCCESS;
+}
+
 enum d_tree_error d_tree_add_path(struct d_tree *t, node_t node, const char *path, bool recursive)
 {
 	char *full_path = realpath(path, NULL);
@@ -817,6 +866,7 @@ enum d_tree_error d_tree_add_path(struct d_tree *t, node_t node, const char *pat
 		if(S_ISREG(statbuf.st_mode))
 		{
 			n->m_name = entry_name;
+			n->m_file.m_null = false;
 			n->m_file.m_size = statbuf.st_size;
 			n->m_type = NODE_FILE;
 		}

@@ -181,23 +181,42 @@ fail:
 	return false;
 }
 
-int main(int argc, char *argv[])
+int save_debug_xml(const char *base, bool scramble)
 {
-	if(argc != 3)
+	tree  = d_tree_create();
+	struct xml_error err = d_tree_load_xml(tree, base);
+	if(err.type != XML_SUCCESS)
+	{
+		fprintf(stderr, "failed to parse config file (%i)", err.type);
+		d_tree_free(tree);
 		return EXIT_FAILURE;
-	char *fs_config_file = argv[1];
-	char *fuse_dir = argv[2];
+	}
 
-	if(fs_config_file == NULL || fuse_dir == NULL)
+	size_t len = strlen(base);
+	char *tmp = alloca(len+2);
+	memcpy(tmp, base, len);
+	tmp[len+0] = 'd';
+	tmp[len+1] = '\0';
+
+	if(!d_tree_make_debug_xml(tree, tmp, scramble))
+	{
+		fprintf(stderr, "failed to save debug xml");
+		d_tree_free(tree);
 		return EXIT_FAILURE;
+	}
+	d_tree_free(tree);
+	return EXIT_SUCCESS;
+}
 
+bool check_valid_mountpoint(const char *fuse_dir)
+{
 	DIR *fuse = opendir(fuse_dir);
 	if(fuse == NULL)
 	{
 		if(errno == ENOTDIR)
 		{
 			fprintf(stderr, "mount point is not a directory");
-			goto fail_open;
+			return false;
 		}
 		else if(errno == ENOENT)
 		{
@@ -205,20 +224,20 @@ int main(int argc, char *argv[])
 			if(mkdir(fuse_dir, mode) != 0)
 			{
 				fprintf(stderr, "failed to create mount directory");
-				goto fail_open;
+				return false;
 			}
 			fuse = opendir(fuse_dir);
 			if(fuse == NULL)
 			{
 				fprintf(stderr, "failed to open created mount directory");
-				goto fail_open;
+				return false;
 			}
 			fprintf(stdout, "created fuse dir: %s with permissions %o", fuse_dir, mode);
 		}
 		else
 		{
 			fprintf(stderr, "failed to open mount directory");
-			goto fail_open;
+			return false;
 		}
 	}
 
@@ -229,9 +248,30 @@ int main(int argc, char *argv[])
 		{
 			fprintf(stderr, "directory is not empty");
 			closedir(fuse);
-			goto fail_open;
+			return false;
 		}
 	closedir(fuse);
+	return true;
+}
+
+int main(int argc, char *argv[])
+{
+	if(argc != 3)
+		return EXIT_FAILURE;
+	char *fs_config_file = argv[1];
+	char *fuse_dir = argv[2];
+
+	if(fs_config_file == NULL || fuse_dir == NULL)
+		return EXIT_FAILURE;
+
+	if(strcmp(fuse_dir, "nullx")==0)
+		return save_debug_xml(fs_config_file, true);
+	if(strcmp(fuse_dir, "null")==0)
+		return save_debug_xml(fs_config_file, false);
+
+	if(!check_valid_mountpoint(fuse_dir))
+		goto fail_open;
+
 	if(tree != NULL)
 	{
 		d_tree_free(tree);

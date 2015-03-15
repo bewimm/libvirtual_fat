@@ -47,20 +47,20 @@ The best way to describe the file format is by showing an example:
     </directory>
 </fs>
 ```
-### <fs>
+### `<fs>`
 The root node `<fs>` can have the following (optional) attributes. If an attribute is omitted its value will be determined based on the content of the file-system:  
-`oem_name` can be used to set the corresponding field of the boot sector. It can be up to 8 characters long The default is "MSWIN4.1"  
-`bytes_per_sector=<512|1024|2048|4096>` sets the size of one cluster. Most storage mediums and formatting tools use 512 for this value.  
-`sectors_per_cluster=<1|2|4|8|16|32|64|128>` sets the size of one cluster in multiples of the sector size (see https://technet.microsoft.com/en-us/library/cc938438.aspx for commonly used values).  
-`num_FATs` can be used to set the number of File Allocation Tables. Any value greater than 0 is valid. The default value is 2.  
-`num_root_entries` only useful for FAT16. It must be value such that `num_root_entries*32` is a multiple of `bytes_per_sector`. The default is 512.  
-`type=<FAT16|FAT32>` can be used to manually specify the type. keep in mind that depending on the size of the files on the drive it might be impossible to fulfil this request.  
-`allow_unsupported_size=<true|false>` The FAT specification states that 'bytes_per_sector*sectors_per_cluster' must not be greater than 64k. This implementation sets this limit lower at 32k. If you know what you are doing you can use this value to ignore this check (so you can have clusters that are greater than 32k). 
+* `oem_name` can be used to set the corresponding field of the boot sector. It can be up to 8 characters long The default is "MSWIN4.1"  
+* `bytes_per_sector=<512|1024|2048|4096>` sets the size of one cluster. Most storage mediums and formatting tools use 512 for this value.  
+* `sectors_per_cluster=<1|2|4|8|16|32|64|128>` sets the size of one cluster in multiples of the sector size (see https://technet.microsoft.com/en-us/library/cc938438.aspx for commonly used values).  
+* `num_FATs` can be used to set the number of File Allocation Tables. Any value greater than 0 is valid. The default value is 2.  
+* `num_root_entries` only useful for FAT16. It must be value such that `num_root_entries*32` is a multiple of `bytes_per_sector`. The default is 512.  
+* `type=<FAT16|FAT32>` can be used to manually specify the type. keep in mind that depending on the size of the files on the drive it might be impossible to fulfil this request.  
+* `allow_unsupported_size=<true|false>` The FAT specification states that 'bytes_per_sector*sectors_per_cluster' must not be greater than 64k. This implementation sets this limit lower at 32k. If you know what you are doing you can use this value to ignore this check (so you can have clusters that are greater than 32k). 
 
-### <directory>
+### `<directory>`
 represents a virtual folder on the drive (i.e a folder that does not exist on the storage where the files are). You must set a name for this folder using the `name`-attribute.
 
-### <entry>
+### `<entry>`
 entries represent files or folders on the actual backing file-system. 
 The attribute 'recursive' is used to include all subfolders and files if the given `path` is a directory.
 

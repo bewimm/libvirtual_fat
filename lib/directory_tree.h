@@ -37,7 +37,7 @@ size_t d_tree_get_num_directories(struct d_tree *t);
 enum d_tree_error d_tree_add_object(struct d_tree *t, const char *path, bool recursive);
 
 /*load from file(s)*/
-enum xml_error_type {XML_SUCCESS = 0, XML_FAILED_OPEN, XML_ROOT_NOT_FOUND, XML_INVALID_ATTRIBUTE};
+enum xml_error_type {XML_SUCCESS = 0, XML_FAILED_OPEN, XML_ROOT_NOT_FOUND, XML_INVALID_ATTRIBUTE, XML_NO_MEMORY};
 struct xml_error
 {
 	enum xml_error_type type;
@@ -59,5 +59,7 @@ bool d_tree_set_num_FATs(struct d_tree *t, uint8_t value);
 bool d_tree_set_root_entries(struct d_tree *t, uint16_t value);
 bool d_tree_set_FAT_type(struct d_tree *t, enum fstype type);
 void d_tree_allow_unsupported_size(struct d_tree *t, bool allow);
+
+bool d_tree_make_debug_xml(struct d_tree *t, const char *filename, bool random_names);
 
 #endif
