@@ -873,6 +873,8 @@ enum d_tree_error d_tree_add_path(struct d_tree *t, node_t node, const char *pat
 		else
 		{
 			n->m_name = entry_name;
+			n->m_directory.m_entries = NULL;
+			n->m_directory.m_num_dir_entries = 0;
 			n->m_type = NODE_FOLDER;
 			t->m_num_dirs += 1;
 		}

@@ -101,6 +101,8 @@ struct xml_error xml_handle_node(struct d_tree *t, node_t tree_node, mxml_node_t
 
 						struct node_data *n = &t->m_node_data[t->m_num_nodes-1];
 						n->m_name = strdup(prop);
+						n->m_directory.m_entries = NULL;
+						n->m_directory.m_num_dir_entries = 0;
 						n->m_type = NODE_FOLDER;
 						t->m_num_dirs += 1;
 
@@ -251,10 +253,10 @@ bool d_tree_make_debug_xml(struct d_tree *t, const char *filename, bool random_n
 		mxmlElementSetAttrf(fs, "num_root_entries", "%i", t->config.num_root_entries);
 
 	if(t->config.user_fat_type)
-		mxmlElementSetAttr(fs, "num_root_entries", t->config.fat_type==FAT16?"FAT16":t->config.fat_type==FAT32?"FAT32":"UNKNOWN");
+		mxmlElementSetAttr(fs, "type", t->config.fat_type==FAT16?"FAT16":t->config.fat_type==FAT32?"FAT32":"UNKNOWN");
 
 	if(t->config.allow_unsupported_size)
-		mxmlElementSetAttr(fs, "num_root_entries", "true");
+		mxmlElementSetAttr(fs, "allow_unsupported_size", "true");
 
 	struct xml_error err = xml_make_debug_node(t, tree_get_root(t->m_tree), fs, random_names);
 	if(err.type != XML_SUCCESS)
@@ -263,6 +265,7 @@ bool d_tree_make_debug_xml(struct d_tree *t, const char *filename, bool random_n
 	FILE *fp = fopen(filename, "w");
 	int ret = mxmlSaveFile(xml, fp, MXML_NO_CALLBACK);
 	fclose(fp);
+	mxmlDelete(xml);
 
 	return ret == 0;
 }

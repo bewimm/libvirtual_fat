@@ -247,8 +247,12 @@ enum d_tree_error create_bootsector(struct boot_t *boot, struct fat_config_t *co
 	else
 		config->num_root_entries = 0;
 
+	if(config->num_root_entries*sizeof(struct fat_dir_entry)%config->bytes_per_sector != 0)
+	{
+		LOG_ERR("root directory size is not a multiple of the sector size");
+		return FAT_NOT_VALID;
+	}
 	bs->num_root_entries = htole16(config->num_root_entries);
-
 
 	struct volume_info *vi;
 
@@ -261,7 +265,7 @@ enum d_tree_error create_bootsector(struct boot_t *boot, struct fat_config_t *co
 		bs->num_reserved_sectors = htole16(config->num_reserved_sectors);
 		config->fat_size = (config->cluster_count*sizeof(uint16_t)+config->bytes_per_sector-1)/config->bytes_per_sector;
 		size_t total_sectors = config->num_reserved_sectors+config->num_fats*config->fat_size+config->cluster_count*config->sectors_per_cluster;
-		total_sectors += config->num_root_entries*32/config->bytes_per_sector;
+		total_sectors += config->num_root_entries*sizeof(struct fat_dir_entry)/config->bytes_per_sector;
 		if(total_sectors >= 1<<16)
 		{
 			bs->num_sectors_16 = 0;
