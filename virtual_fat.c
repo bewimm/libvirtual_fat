@@ -295,8 +295,11 @@ int main(int argc, char *argv[])
 
 	file_size = d_tree_get_size(tree);
 
-	char *fuse_argv[] = {"virtual_fat", "-o", "allow_other", "-s", fuse_dir}; //USE THIS ON ANDROID
-	//char *fuse_argv[] = {"virtual_fat", "-f", "-s", fuse_dir}; //USE THIS FOR DEBUGGING
+#ifdef __ANDROID__
+	char *fuse_argv[] = {"virtual_fat", "-o", "allow_other", "-s", fuse_dir}; //allow_other because fuse is used as root
+#else
+	char *fuse_argv[] = {"virtual_fat", "-f", "-s", fuse_dir}; //keep in foreground and single threaded
+#endif
 	int fuse_argc = sizeof(fuse_argv)/sizeof(*fuse_argv);
 
 	strncpy(config_file_content, fs_config_file, sizeof(config_file_content));

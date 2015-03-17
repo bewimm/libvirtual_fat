@@ -98,14 +98,10 @@ void fat_set_cluster_value(uint8_t *fat, enum fstype type, uint64_t cluster, uin
 	switch(type)
 	{
 		case FAT16:
-			fat[2*cluster+0] = (value & 0x00FF);
-			fat[2*cluster+1] = (value & 0xFF00) >> 8;
+			((uint16_t *)fat)[cluster] = htole16(value);
 			break;
 		case FAT32:
-			fat[4*cluster+0] =  value & 0x000000FF;
-			fat[4*cluster+1] = (value & 0x0000FF00) >> 8;
-			fat[4*cluster+2] = (value & 0x00FF0000) >> 16;
-			fat[4*cluster+3] = (value & 0xFF000000) >> 24;
+			((uint32_t *)fat)[cluster] = htole32(value);
 			break;
 		default:
 			LOG_ERR("BUG:invalid type");
@@ -245,7 +241,7 @@ struct fat_dir_entry *handle_short_name_duplicates(struct fat_dir_entry *current
 			goto next_iteration;
 		int i, num_ext_start;
 		for(i=0; i<3; i++)
-			if(latest->name[8+i] != current->name[8+i])
+			if(latest->ext[i] != current->ext[i])
 				goto next_iteration;
 		bool has_numeric_extension = true;
 		for(i=7; i>1; i--)
@@ -414,7 +410,8 @@ uint32_t d_tree_convert_to_fat_node(struct d_tree *t, node_t n, struct conversio
 			parent_cluster -= t->m_cluster_offset;
 		struct fat_dir_entry *cur_entry = entries+cur_idx;
 		memset(cur_entry, 0, sizeof(*cur_entry));
-		strncpy(cur_entry->name, ".          ",11);
+		strncpy(cur_entry->name, ".       ",8);
+		strncpy(cur_entry->ext, "   ",3);
 		cur_entry->attr = ATTR_RO | ATTR_DIR;
 		cur_entry->starthi = htole16((disk_cluster&0xFFFF0000)>>16);
 		cur_entry->start = htole16(disk_cluster&0x0000FFFF);
@@ -422,7 +419,8 @@ uint32_t d_tree_convert_to_fat_node(struct d_tree *t, node_t n, struct conversio
 
 		cur_entry = entries+cur_idx;
 		memset(cur_entry, 0, sizeof(*cur_entry));
-		strncpy(cur_entry->name, "..         ",11);
+		strncpy(cur_entry->name, "..      ",8);
+		strncpy(cur_entry->ext, "   ",3);
 		cur_entry->attr = ATTR_RO | ATTR_DIR;
 		cur_entry->starthi = htole16((parent_cluster&0xFFFF0000)>>16);
 		cur_entry->start = htole16(parent_cluster&0x0000FFFF);
