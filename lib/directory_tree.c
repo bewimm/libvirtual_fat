@@ -143,7 +143,7 @@ enum d_tree_error d_tree_convert_to_fat(struct d_tree *t)
 		return err;
 
 	size_t cluster_size = t->config.bytes_per_sector*t->config.sectors_per_cluster;
-	t->m_cluster_offset = t->config.fat_type == FAT16 ? t->config.num_root_entries*sizeof(struct fat_dir_entry)/cluster_size : 0;
+	t->m_cluster_offset = t->config.fat_type == FAT16 ? (t->config.num_root_entries*sizeof(struct fat_dir_entry)+cluster_size-1)/cluster_size : 0;
 
 	struct conversion_data data;
 	/*data.conv = iconv_open("UTF-8", "UTF-16");
@@ -568,13 +568,15 @@ enum d_tree_error d_tree_get_cluster_content(struct d_tree *t, off64_t offset, s
 {
 	const struct fat_config_t *config = &t->config;
 	const off64_t fat_sector_end = config->num_reserved_sectors+config->num_fats*config->fat_size;
+	const off64_t root_dir_sectors = (config->num_root_entries*sizeof(struct fat_dir_entry) +config->bytes_per_sector-1)/config->bytes_per_sector;
+	const off64_t root_dir_sector_end = fat_sector_end + root_dir_sectors;
 	const size_t cluster_size = config->bytes_per_sector*config->sectors_per_cluster;
 
 	while(length>0)
 	{
 		size_t old_length = length;
-		size_t cluster = (offset-fat_sector_end*config->bytes_per_sector)/cluster_size;
-		size_t in_cluster_offset = offset-fat_sector_end*config->bytes_per_sector-cluster*cluster_size;
+		size_t cluster = (offset-root_dir_sector_end*config->bytes_per_sector)/cluster_size+t->m_cluster_offset;
+		size_t in_cluster_offset = offset-root_dir_sector_end*config->bytes_per_sector-(cluster-t->m_cluster_offset)*cluster_size;
 		cluster += 2;
 
 		if(offset < config->num_reserved_sectors*config->bytes_per_sector)
@@ -587,7 +589,7 @@ enum d_tree_error d_tree_get_cluster_content(struct d_tree *t, off64_t offset, s
 		}
 		else if(offset < fat_sector_end*config->bytes_per_sector) /*FATs*/
 		{
-			size_t fat_pos = offset-config->num_reserved_sectors*config->bytes_per_sector;
+			off64_t fat_pos = offset-config->num_reserved_sectors*config->bytes_per_sector;
 			while(fat_pos >= config->fat_size*config->bytes_per_sector) /*FATs are block aligned*/
 				fat_pos -= config->fat_size*config->bytes_per_sector;
 			if(fat_pos >= t->m_fat_length)
@@ -608,6 +610,41 @@ enum d_tree_error d_tree_get_cluster_content(struct d_tree *t, off64_t offset, s
 				length -= len;
 				dst += len;
 				offset += len;
+			}
+
+		}
+		else if(offset < root_dir_sector_end*config->bytes_per_sector)
+		{
+			node_t n = t->m_cluster_node[t->m_cluster_offset];
+			size_t idx = (size_t)tree_node_get_data(t->m_tree,n);
+			struct node_data *node = &t->m_node_data[idx];
+
+			if(node->m_type != NODE_FOLDER)
+			{
+				LOG_ERR("BUG: entry for root directory is not a directory");
+				return BUG;
+			}
+
+			size_t folder_len = node->m_directory.m_num_dir_entries*sizeof(*node->m_directory.m_entries);
+			size_t folder_offset = offset-fat_sector_end*config->bytes_per_sector;
+			size_t max_len = min(length, folder_len-folder_offset);
+
+			if(folder_offset >= folder_len)
+			{
+				size_t root_dir_remainder = root_dir_sector_end*config->bytes_per_sector-offset;
+				root_dir_remainder = min(root_dir_remainder, length);
+				memset(dst, 0, root_dir_remainder);
+				length -= root_dir_remainder;
+				dst += root_dir_remainder;
+				offset += root_dir_remainder;
+			}
+			else
+			{
+				uint8_t *src = (uint8_t *)node->m_directory.m_entries;
+				memcpy(dst, src+folder_offset, max_len);
+				length -= max_len;
+				dst += max_len;
+				offset += max_len;
 			}
 
 		}
