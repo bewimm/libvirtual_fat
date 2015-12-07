@@ -1,5 +1,10 @@
 /*XML file loading*/
 #include <mxml.h>
+#include <assert.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "log.h"
 #include "directory_tree.h"
@@ -67,6 +72,111 @@ bool convert_string_to_int64(const char *string, int64_t *dst)
 	return true;
 }
 
+struct xorshift_state
+{
+	uint64_t s[2];
+};
+
+uint64_t xorshift(struct xorshift_state *s)
+{
+	uint64_t x=s->s[0];
+	const uint64_t y=s->s[1];
+	s->s[0]=y;
+	x^=x<<23;
+	x^=x>>17;
+	x^=y^(y>>26);
+	s->s[1]=x;
+	return x+y;
+}
+
+/*  creates a new file with random contents of a given size.
+	the path will be created if it does not exist*/
+bool create_random_file(const char *root, struct d_tree *t, node_t tree_node, const char *name, size_t file_size)
+{
+	assert(strlen(root) > 0);
+	node_t *nodes = NULL;
+	size_t path_size = 0;
+	size_t path_length = strlen(root)+strlen(name)+1;
+
+	node_t cur_node = tree_node;
+	while(cur_node != tree_get_root(t->m_tree))
+	{
+		size_t idx = (size_t)tree_node_get_data(t->m_tree, cur_node);
+		assert(t->m_node_data[idx].m_type == NODE_FOLDER);
+		path_length += strlen(t->m_node_data[idx].m_name)+1; /*+1 for '/'*/
+
+		cur_node = tree_node_get_parent(t->m_tree, cur_node);
+		nodes = realloc(nodes, (path_size+1)*sizeof(node_t));
+		nodes[path_size] = idx;
+		path_size++;
+
+	}
+
+	char *path = calloc(path_length+1, sizeof(char));
+	char *p = path;
+	strncpy(p, root, strlen(root));
+	p+=strlen(root);
+	*p++ =  '/';
+
+	for(size_t i=0; i<path_size; i++)
+	{
+		size_t idx = nodes[path_size-1-i];
+		const char *folder_name = t->m_node_data[idx].m_name;
+		strncpy(p, folder_name, strlen(folder_name));
+		p+=strlen(folder_name);
+		*p++ = '/';
+
+		int ret = mkdir(path,S_IRWXU|S_IRWXG|S_IRWXO);
+		if(ret != 0 && ret != -1 && errno != EEXIST)
+		{
+			LOG_ERR("failed to create temp folder");
+			goto fail;
+		}
+	}
+
+	strncpy(p, name, strlen(name));
+	int fd = open(path, O_CREAT|O_WRONLY,S_IRWXU|S_IRWXG|S_IRWXO);
+	if(fd == -1)
+	{
+		LOG_ERR("failed to create generated file");
+		goto fail;
+	}
+
+	/*seed with the filename*/
+	struct xorshift_state shift_state;
+	shift_state.s[0] = shift_state.s[1] = 0;
+	for(size_t i=0; i<min(strlen(name), sizeof(shift_state)); i++)
+		((char *)shift_state.s)[i] = name[i];
+
+	while(file_size > 0)
+	{
+		uint64_t buf[64]; //arbitrary buffer size (could affect performance)
+		for(size_t i=0; i<sizeof(buf)/sizeof(*buf); i++)
+			buf[i] = xorshift(&shift_state);
+
+		size_t to_write = min(sizeof(buf),file_size);
+		if(write(fd, buf, to_write) != to_write)
+		{
+			LOG_ERR("failed to write random data to file");
+			goto fail;
+		}
+		file_size -= to_write;
+	}
+
+	if(d_tree_add_path(t, tree_node, path, false) != SUCCESS)
+		goto fail;
+
+	close(fd);
+	free(nodes);
+	free(path);
+	return true;
+fail:
+	close(fd);
+	free(nodes);
+	free(path);
+	return false;
+}
+
 struct xml_error xml_handle_node(struct d_tree *t, node_t tree_node, mxml_node_t *node)
 {
 	struct xml_error err;
@@ -119,19 +229,21 @@ struct xml_error xml_handle_node(struct d_tree *t, node_t tree_node, mxml_node_t
 					const char *prop = mxmlElementGetAttr(cur_node, "path");
 					if(prop != NULL)
 					{
+#ifdef DEBUG_BUILD
 						const char *dummy = mxmlElementGetAttr(cur_node, "size");
 						if(dummy != NULL)
 						{
 							int64_t value;
 							if(convert_string_to_int64(dummy, &value))
 							{
-								if(d_tree_add_dummy(t, tree_node, prop, value) != SUCCESS)
+								if(!create_random_file(t->m_tmp_dir == NULL?"tmp":t->m_tmp_dir, t, tree_node, prop, value))
 									LOG_ERR("failed to add \"%s\"", prop);
 							}
 							else
 								LOG_ERR("failed to convert size to number");
 						}
 						else
+#endif
 						{
 							const char *rec = mxmlElementGetAttr(cur_node, "recursive");
 							bool recursive = rec!=NULL?strcmp(rec,"true")==0:false;

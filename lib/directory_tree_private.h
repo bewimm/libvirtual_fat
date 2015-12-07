@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+//#define DEBUG_BUILD
+
 #include "tree.h"
 
 #define ATTR_RO      1		/* read-only */
@@ -44,7 +46,6 @@ struct node_data
 		struct file_data
 		{
 			off64_t m_size;
-			bool m_null;
 		} m_file;
 		struct directory_data
 		{
@@ -107,6 +108,10 @@ struct d_tree
 
 	size_t m_cluster_offset; /*compensates for hardcoded root dir for FAT16*/
 	struct boot_t boot;
+#ifdef DEBUG_BUILD
+	char *m_tmp_dir; /*path where generated files will be stored*/
+#endif
+
 };
 
 #define min(x,y) ((x)<(y)?(x):(y))
@@ -116,8 +121,6 @@ enum d_tree_error d_tree_add_path(struct d_tree *t, node_t node, const char *pat
 
 char *base_name(char *path);
 
-//POSSIBLE BYTES_PER_CLUSTER: 512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288
-//65k+ are not officially supported
 static const size_t bytes_per_cluster[] =
 {
 	512,1024,2048,4096,8192,16384,32768,65536,

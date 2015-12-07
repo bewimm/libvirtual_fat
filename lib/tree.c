@@ -139,6 +139,13 @@ node_t tree_node_get_child(struct tree_t *t, node_t n, size_t idx)
 	return t->m_nodes[n].m_children[idx];
 }
 
+node_t tree_node_get_parent(struct tree_t *t, node_t n)
+{
+	if(t == NULL || n == INVALID_NODE || n>=t->m_num_nodes)
+		return INVALID_NODE;
+	return t->m_nodes[n].m_parent;
+}
+
 void *tree_node_get_data(struct tree_t *t, node_t n)
 {
 	if(t == NULL || n == INVALID_NODE || n>=t->m_num_nodes)

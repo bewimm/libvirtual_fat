@@ -76,8 +76,10 @@ typedef size_t (*termination_handler)(uint64_t num_cluster);
 
 static size_t check_FAT16(uint64_t num_cluster)
 {
-	if(num_cluster < 4085)
-		return 4085;
+	/*according to fatgen103.pdf this value should be 4085,
+	  but Windows seems to misidentify the drive as FAT12 in that case*/
+	if(num_cluster < 4087)
+		return 4087;
 	else if(num_cluster < 65527)
 		return num_cluster;
 	return 0;
@@ -156,7 +158,9 @@ enum d_tree_error try_make_fat32(struct fat_config_t *config, const struct clust
 }
 
 #ifdef __ANDROID__
+#ifndef le16toh
 #define le16toh(x) letoh16(x)
+#endif
 #endif
 
 enum d_tree_error create_bootsector(struct boot_t *boot, struct fat_config_t *config, const struct cluster_count_t *cluster_info)

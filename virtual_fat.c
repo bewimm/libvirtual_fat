@@ -1,4 +1,8 @@
+#ifdef __ANDROID__
 #define FUSE_USE_VERSION 30
+#else
+#define FUSE_USE_VERSION 26
+#endif
 
 #include <fuse.h>
 #include <stddef.h>
@@ -254,22 +258,50 @@ bool check_valid_mountpoint(const char *fuse_dir)
 	return true;
 }
 
+void print_usage(const char *name)
+{
+	printf("USAGE: %s [-f] config.xml mount_point\n", name);
+}
+
 int main(int argc, char *argv[])
 {
-	if(argc != 3)
+	bool keep_foreground = false;
+	if(argc < 3 || argc > 4)
+	{
+		print_usage(argv[0]);
 		return EXIT_FAILURE;
-	char *fs_config_file = argv[1];
-	char *fuse_dir = argv[2];
+	}
 
-	if(fs_config_file == NULL || fuse_dir == NULL)
+	char *args[2];
+	args[0] = args[1] = NULL;
+	char **p = &args[0];
+	int argnum = 0;
+
+	for(int i=1; i<argc; i++)
+	{
+		if(strcmp(argv[i],"-f") == 0)
+			keep_foreground = true;
+		else
+		{
+			if(argnum == 2)
+			{
+				print_usage(argv[0]);
+				return EXIT_FAILURE;
+			}
+			argnum++;
+			*p++ = argv[i];
+		}
+	}
+
+	if(args[0] == NULL || args[1] == NULL)
 		return EXIT_FAILURE;
 
-	if(strcmp(fuse_dir, "nullx")==0)
-		return save_debug_xml(fs_config_file, true);
-	if(strcmp(fuse_dir, "null")==0)
-		return save_debug_xml(fs_config_file, false);
+	if(strcmp(args[1], "nullx")==0)
+		return save_debug_xml(args[0] , true);
+	if(strcmp(args[1], "null")==0)
+		return save_debug_xml(args[0] , false);
 
-	if(!check_valid_mountpoint(fuse_dir))
+	if(!check_valid_mountpoint(args[1]))
 		goto fail_open;
 
 	if(tree != NULL)
@@ -278,7 +310,7 @@ int main(int argc, char *argv[])
 		tree = NULL;
 	}
 	tree  = d_tree_create();
-	struct xml_error err = d_tree_load_xml(tree, fs_config_file);
+	struct xml_error err = d_tree_load_xml(tree, args[0]);
 	if(err.type != XML_SUCCESS)
 	{
 		fprintf(stderr, "failed to parse config file (%i)", err.type);
@@ -296,13 +328,14 @@ int main(int argc, char *argv[])
 	file_size = d_tree_get_size(tree);
 
 #ifdef __ANDROID__
-	char *fuse_argv[] = {"virtual_fat", "-o", "allow_other", "-s", fuse_dir}; //allow_other because fuse is used as root
-#else
-	char *fuse_argv[] = {"virtual_fat", "-f", "-s", fuse_dir}; //keep in foreground and single threaded
-#endif
+	char *fuse_argv[] = {"virtual_fat", "-o", "allow_other", "-s", args[1]}; //allow_other because fuse is used as root
 	int fuse_argc = sizeof(fuse_argv)/sizeof(*fuse_argv);
+#else
+	char *fuse_argv[] = {"virtual_fat", "-s", args[1], "-f"}; //keep in foreground and single threaded
+	int fuse_argc = sizeof(fuse_argv)/sizeof(*fuse_argv) + (keep_foreground?0:-1);
+#endif
 
-	strncpy(config_file_content, fs_config_file, sizeof(config_file_content));
+	strncpy(config_file_content, args[0] , sizeof(config_file_content));
 	if(fuse_main(fuse_argc, fuse_argv, &virtualfs_operations, NULL) != EXIT_SUCCESS)
 	{
 		fprintf(stderr, "fuse_main returned an error code");

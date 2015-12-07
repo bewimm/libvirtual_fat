@@ -62,4 +62,6 @@ void d_tree_allow_unsupported_size(struct d_tree *t, bool allow);
 
 bool d_tree_make_debug_xml(struct d_tree *t, const char *filename, bool random_names);
 
+void set_temp_dir(struct d_tree *t, const char *path);
+
 #endif
