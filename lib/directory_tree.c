@@ -680,7 +680,7 @@ enum d_tree_error d_tree_get_cluster_content(struct d_tree *t, off64_t offset, s
 					{
 						if(last_file > 0)
 							close(last_file);
-						last_file = open(node->m_name, O_RDONLY);
+						last_file = open(node->m_name, O_RDONLY|O_NOATIME|O_DIRECT);
 						if(last_file == -1)
 							LOG_ERR("failed to open file");
 						else
@@ -705,8 +705,7 @@ enum d_tree_error d_tree_get_cluster_content(struct d_tree *t, off64_t offset, s
 					else
 					{
 						size_t max_len = min(length, node->m_file.m_size-file_offset);
-						lseek64(last_file, file_offset, SEEK_SET);
-						size_t read_bytes = read(last_file, dst, sizeof(uint8_t)*max_len);
+						size_t read_bytes = pread64(last_file, dst, sizeof(uint8_t)*max_len, file_offset);
 						if(read_bytes != max_len)
 							LOG_ERR("file does not have the expected length");
 
