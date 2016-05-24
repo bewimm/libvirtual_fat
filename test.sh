@@ -1,6 +1,8 @@
 function clean {
+	sleep 1s
 	fusermount -u ./fat_mount
 	fusermount -u ./fuse
+	sleep 1s
 
 	rm -r ./fat_mount
 	rm -r ./tmp

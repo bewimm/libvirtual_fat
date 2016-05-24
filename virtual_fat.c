@@ -185,6 +185,62 @@ fail:
 	return false;
 }
 
+#ifdef TEST_FUZZ
+bool read_all(size_t block_size)
+{
+	uint8_t *buf = malloc(sizeof(uint8_t)*block_size);
+	for(size_t i=0; i<file_size; i+=block_size)
+	{
+		uint8_t b;
+		off64_t read_size = min(file_size-i*block_size, block_size);
+		int read_bytes = virtualfs_read(fat_file, buf, read_size, 0, NULL);
+		if(read_bytes != read_size)
+		{
+			printf("failed to read block %zu\n",i);
+			goto fail;
+		}
+	}
+
+	free(buf);
+	return true;
+fail:
+	free(buf);
+	return false;
+}
+
+bool path_is_directory(const char* path)
+{
+	struct stat s_buf;
+	if (stat(path, &s_buf))
+		return false;
+	return S_ISDIR(s_buf.st_mode);
+}
+
+void delete_folder_tree(const char* directory_name, bool remove_root)
+{
+	struct dirent *ep;
+	char p_buf[4096] = {0};
+
+	DIR *dp = opendir(directory_name);
+
+	while ((ep = readdir(dp)) != NULL)
+	{
+		if(strcmp(".",ep->d_name) != 0 && strcmp("..",ep->d_name) != 0)
+		{
+			sprintf(p_buf, "%s/%s", directory_name, ep->d_name);
+			if (path_is_directory(p_buf))
+				delete_folder_tree(p_buf,true);
+			else
+				unlink(p_buf);
+		}
+	}
+	closedir(dp);
+	if(remove_root)
+		rmdir(directory_name);
+}
+#endif
+
+
 int save_debug_xml(const char *base, bool scramble)
 {
 	tree  = d_tree_create();
@@ -318,7 +374,6 @@ int main(int argc, char *argv[])
 	}
 
 	//d_tree_print(tree);
-
 	if(d_tree_convert_to_fat(tree) != SUCCESS)
 	{
 		fprintf(stderr, "failed to convert to fat file system");
@@ -335,12 +390,21 @@ int main(int argc, char *argv[])
 	int fuse_argc = sizeof(fuse_argv)/sizeof(*fuse_argv) + (keep_foreground?0:-1);
 #endif
 
+#ifndef TEST_FUZZ
 	strncpy(config_file_content, args[0] , sizeof(config_file_content));
 	if(fuse_main(fuse_argc, fuse_argv, &virtualfs_operations, NULL) != EXIT_SUCCESS)
 	{
 		fprintf(stderr, "fuse_main returned an error code");
 		goto fail_d_tree;
 	}
+#else
+	if(!read_all(4096))
+	{
+		fprintf(stderr, "read_all() failed");
+		goto fail_d_tree;
+	}
+	delete_folder_tree("./tmp",false);
+#endif
 
 	return EXIT_SUCCESS;
 

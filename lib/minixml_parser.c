@@ -141,7 +141,8 @@ bool create_random_file(const char *root, struct d_tree *t, node_t tree_node, co
 		LOG_ERR("failed to create generated file");
 		goto fail;
 	}
-
+/*if we're not fuzzy testing fill the files with random data (to check if the files are correctly translated)*/
+#ifndef TEST_FUZZ
 	/*seed with the filename*/
 	struct xorshift_state shift_state;
 	shift_state.s[0] = shift_state.s[1] = 0;
@@ -162,15 +163,23 @@ bool create_random_file(const char *root, struct d_tree *t, node_t tree_node, co
 		}
 		file_size -= to_write;
 	}
+#endif
+	fsync(fd);
+	close(fd);
+
+/*just create the files with a fixed size. we are only interested in crashing test files so make this quick*/
+#ifdef TEST_FUZZ
+	truncate(path, file_size);
+#endif
 
 	if(d_tree_add_path(t, tree_node, path, false) != SUCCESS)
 		goto fail;
 
-	close(fd);
 	free(nodes);
 	free(path);
 	return true;
 fail:
+	fsync(fd);
 	close(fd);
 	free(nodes);
 	free(path);
