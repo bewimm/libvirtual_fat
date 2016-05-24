@@ -447,6 +447,15 @@ uint32_t d_tree_convert_to_fat_node(struct d_tree *t, node_t n, struct conversio
 			name = tmp_str;
 		else
 			LOG_ERR("BUG: Unknown node type.");
+
+		if(2*strlen(name)>=sizeof(data->path_buf))
+		{
+			/*catching this error here is not ideal as it wastes a bit of space*/
+			LOG_ERR("filenames may not be longer than 255 characters - skipping entry");
+			free(tmp_str);
+			continue;
+		}
+
 		num_long_entries = (strlen(name)+DIRENT_MAX_CHARS)/DIRENT_MAX_CHARS;
 
 		uint8_t chksum;
